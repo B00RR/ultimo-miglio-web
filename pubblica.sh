@@ -33,7 +33,10 @@ if [ "${USE_BUILD_INDEX:-0}" = 1 ] && [ -f "$SRC/index.html" ]; then
   # usa index.html della build, aggiungendo solo viewport senza zoom e touch-action
   sed -e 's|<meta name="viewport"[^>]*>|<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">|' \
       -e 's|</style>|html,body,canvas{touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}</style>|' \
+      -e 's|createUnityInstance(\([a-zA-Z_$]*\),{|createUnityInstance(\1,{showBanner:function(m,t){console.warn("[Unity "+(t\|\|"info")+"] "+m);},errorHandler:function(e,f,l){console.warn("[Unity error]",e,f,l);return true;},|' \
+      -e 's|\.catch(function(e){alert(e);})|.catch(function(e){console.warn("[Unity init]",e);})|' \
       "$SRC/index.html" > index.html
+  grep -q 'errorHandler' index.html || { echo "ERRORE: patch errorHandler non applicata"; exit 1; }
 else
 sed -e "s|^var LOADER_FILE = .*|var LOADER_FILE = \"$LOADER\";|" \
     -e "s|^var DATA_FILE = .*|var DATA_FILE = \"$DATA\";|" \
