@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Uso: ./pubblica.sh <cartella_build_webgl>   (contiene Build/ e opzionalmente TemplateData/, StreamingAssets/)
-# Opzioni env: NO_PUSH=1 (solo prepara, niente commit/push/verifica), WAIT=secondi max attesa deploy (default 300)
+# Opzioni env: USE_BUILD_INDEX=1 (usa index.html della build + patch mobile), NO_PUSH=1 (solo prepara, niente commit/push/verifica), WAIT=secondi max attesa deploy (default 300)
 set -euo pipefail
 SRC="${1:?Uso: $0 <cartella_build>}"; SRC="$(cd "$SRC" && pwd)"
 REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
@@ -29,10 +29,17 @@ cp -r "$B" Build
 # file >100MB rifiutati da GitHub
 big=$(find Build StreamingAssets -type f -size +95M 2>/dev/null || true)
 [ -z "$big" ] || { echo "ERRORE: file troppo grandi per GitHub (>100MB): $big"; exit 1; }
+if [ "${USE_BUILD_INDEX:-0}" = 1 ] && [ -f "$SRC/index.html" ]; then
+  # usa index.html della build, aggiungendo solo viewport senza zoom e touch-action
+  sed -e 's|<meta name="viewport"[^>]*>|<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">|' \
+      -e 's|</style>|html,body,canvas{touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}</style>|' \
+      "$SRC/index.html" > index.html
+else
 sed -e "s|^var LOADER_FILE = .*|var LOADER_FILE = \"$LOADER\";|" \
     -e "s|^var DATA_FILE = .*|var DATA_FILE = \"$DATA\";|" \
     -e "s|^var FRAMEWORK_FILE = .*|var FRAMEWORK_FILE = \"$FW\";|" \
     -e "s|^var CODE_FILE = .*|var CODE_FILE = \"$WASM\";|" index_unity.html > index.html
+fi
 touch .nojekyll
 [ "${NO_PUSH:-0}" = 1 ] && { echo "NO_PUSH=1: preparato, nessun commit."; exit 0; }
 git add -A
