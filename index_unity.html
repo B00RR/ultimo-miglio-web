@@ -59,7 +59,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#
     dataUrl:b+DATA_FILE, frameworkUrl:b+FRAMEWORK_FILE, codeUrl:b+CODE_FILE,
     streamingAssetsUrl:"StreamingAssets",
     companyName:COMPANY_NAME, productName:PRODUCT_NAME, productVersion:PRODUCT_VERSION,
-    devicePixelRatio: Math.min(window.devicePixelRatio||1, 2),
+    devicePixelRatio: Math.min(window.devicePixelRatio||1, 1.25),
     matchWebGLToCanvasSize:true,
     showBanner:function(msg,type){ if(type==="error") err(msg); else console.warn(msg); }
   };
