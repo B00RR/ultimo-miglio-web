@@ -18,6 +18,7 @@ var CODE_FILE = "ultimo-miglio.wasm";
 var COMPANY_NAME = "B00RR";
 var PRODUCT_NAME = "Ultimo Miglio";
 var PRODUCT_VERSION = "1.0";
+var BUILD_SHA = "5b07b83";
 // ========================================================
 </script>
 <style>
@@ -55,8 +56,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#
   document.addEventListener("touchmove",function(e){e.preventDefault();},{passive:false});
   document.addEventListener("gesturestart",function(e){e.preventDefault();});
   var b=BUILD_DIR+"/";
+  var V=BUILD_SHA?"?v="+BUILD_SHA:"";
   var config={
-    dataUrl:b+DATA_FILE, frameworkUrl:b+FRAMEWORK_FILE, codeUrl:b+CODE_FILE,
+    dataUrl:b+DATA_FILE+V, frameworkUrl:b+FRAMEWORK_FILE+V, codeUrl:b+CODE_FILE+V,
     streamingAssetsUrl:"StreamingAssets",
     companyName:COMPANY_NAME, productName:PRODUCT_NAME, productVersion:PRODUCT_VERSION,
     devicePixelRatio: Math.min(window.devicePixelRatio||1, 1.25),
@@ -64,7 +66,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#
     showBanner:function(msg,type){ if(type==="error") err(msg); else console.warn(msg); }
   };
   var s=document.createElement("script");
-  s.src=b+LOADER_FILE;
+  s.src=b+LOADER_FILE+V;
   s.onerror=function(){err("Impossibile caricare "+s.src);};
   s.onload=function(){
     createUnityInstance(canvas,config,function(p){var v=Math.round(p*100);fill.style.width=v+"%";pct.textContent=v+"%";})
