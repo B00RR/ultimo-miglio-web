@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Uso: ./pubblica.sh <cartella_build_webgl>   (contiene Build/ e opzionalmente TemplateData/, StreamingAssets/)
-# Opzioni env: USE_BUILD_INDEX=1 (usa index.html della build + patch mobile), NO_PUSH=1 (solo prepara, niente commit/push/verifica), WAIT=secondi max attesa deploy (default 300)
+# Opzioni env: BUILD_SHA=<sha gioco> (default: git del clone della build), USE_BUILD_INDEX=1 (usa index.html della build + patch mobile), NO_PUSH=1 (solo prepara, niente commit/push/verifica), WAIT=secondi max attesa deploy (default 300)
 set -euo pipefail
 SRC="${1:?Uso: $0 <cartella_build>}"; SRC="$(cd "$SRC" && pwd)"
 REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
@@ -21,6 +21,10 @@ if ls "$B" | grep -qE '\.(br|gz)$'; then
   echo "Ricompila con Compression Format = Disabled, oppure Gzip/Brotli + 'Decompression Fallback' attivo (file .unityweb)."
   exit 1
 fi
+# SHA corto del gioco per il cache-bust ?v=: da BUILD_SHA, altrimenti dal git del clone della build
+BSHA="${BUILD_SHA:-$(git -C "$SRC" rev-parse --short=7 HEAD 2>/dev/null || true)}"
+BSHA="${BSHA:0:7}"
+[[ "$BSHA" =~ ^[0-9a-fA-F]{7}$ ]] || { echo "ERRORE: SHA del gioco non valido o assente (imposta BUILD_SHA=<sha>)"; exit 1; }
 echo "Build: $NAME | $DATA | $FW | $WASM"
 rm -rf Build TemplateData StreamingAssets
 cp -r "$B" Build
@@ -43,24 +47,30 @@ sed -e "s|^var LOADER_FILE = .*|var LOADER_FILE = \"$LOADER\";|" \
     -e "s|^var FRAMEWORK_FILE = .*|var FRAMEWORK_FILE = \"$FW\";|" \
     -e "s|^var CODE_FILE = .*|var CODE_FILE = \"$WASM\";|" index_unity.html > index.html
 fi
+# cache-bust idempotente: inserisce o sostituisce ?v=<sha> sugli URL di Build/, TemplateData/, StreamingAssets/
+sed -i -e "s|^var BUILD_SHA = .*|var BUILD_SHA = \"$BSHA\";|" index.html
+perl -i -pe 's#((?:Build|TemplateData|StreamingAssets)/[^"\x27?\s)]+\.(?:js|data|wasm|unityweb|css|png|ico|json))(?:\?v=[0-9A-Za-z_]+)?#$1?v='"$BSHA"'#g' index.html
+grep -q "$BSHA" index.html || { echo "ERRORE: cache-bust ?v=$BSHA non applicato"; exit 1; }
 touch .nojekyll
 [ "${NO_PUSH:-0}" = 1 ] && { echo "NO_PUSH=1: preparato, nessun commit."; exit 0; }
-git add -A
-git commit -m "Pubblica build WebGL $NAME ($(date '+%Y-%m-%d %H:%M'))" || echo "Niente da committare"
-git push origin HEAD
+git add -A -- Build index.html .nojekyll
+[ -d TemplateData ] && git add -A -- TemplateData
+[ -d StreamingAssets ] && git add -A -- StreamingAssets
+git commit -m "Pubblica build WebGL $NAME @ $BSHA ($(date '+%Y-%m-%d %H:%M'))" || echo "Niente da committare"
+git pull --rebase --autostash && git push origin HEAD || { git pull --rebase --autostash && git push origin HEAD; }
 SHA=$(git rev-parse --short HEAD)
 echo "Attendo deploy GitHub Pages..."
 end=$(( $(date +%s) + ${WAIT:-300} )); ok=0
 while [ "$(date +%s)" -lt "$end" ]; do
-  if curl -fsS "$URL/?v=$SHA" 2>/dev/null | grep -q "$LOADER"; then ok=1; break; fi
+  if curl -fsS "$URL/?v=$SHA" 2>/dev/null | grep -q "$BSHA"; then ok=1; break; fi
   sleep 10
 done
 [ $ok = 1 ] || { echo "ERRORE: index.html nuovo non visibile dopo ${WAIT:-300}s"; exit 1; }
 fail=0
-for f in "" "Build/$LOADER" "Build/$FW" "Build/$DATA" "Build/$WASM"; do
+for f in "" "Build/$LOADER?v=$BSHA" "Build/$FW?v=$BSHA" "Build/$DATA?v=$BSHA" "Build/$WASM?v=$BSHA"; do
   r=$(curl -sI -o /dev/null -w '%{http_code} %{content_type}' "$URL/$f")
   echo "$r  $URL/$f"
   case "$r" in 200*) ;; *) fail=1;; esac
-  case "$f" in *.wasm) echo "$r" | grep -q 'application/wasm' || echo "  AVVISO: mime wasm non application/wasm (Unity usa fallback più lento)";; esac
+  case "$f" in *.wasm*) echo "$r" | grep -q 'application/wasm' || echo "  AVVISO: mime wasm non application/wasm (Unity usa fallback più lento)";; esac
 done
 [ $fail = 0 ] && echo "OK: $URL" || { echo "ERRORE: alcuni file non rispondono 200"; exit 1; }
